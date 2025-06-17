@@ -24,6 +24,11 @@ const client = new Client({
   authStrategy: new LocalAuth()
 });
 
+const allowedGroupIds = [
+  '123456789-123456789@g.us',  // Ganti dengan ID grup yang diizinkan
+  '987654321-987654321@g.us'
+];
+
 async function queryGemini(prompt) {
   try {
     const response = await gemini.models.generateContent({
@@ -71,6 +76,18 @@ async function queryChatGPT(prompt) {
 }
 
 client.on('message', async msg => {
+  // allow only group messages
+  //const chatId = msg.from;
+  //const isGroup = chatId.endsWith('@g.us');
+  //
+  //if (!isGroup) {
+  //  return;
+  //}
+  //
+  //if (!allowedGroupIds.includes(chatId)) {
+  //  return;
+  //}
+
   const body = msg.body.trim();
   
   try {
