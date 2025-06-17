@@ -1,0 +1,22 @@
+{
+  "name": "wwebjs-bot",
+  "version": "1.0.0",
+  "main": "main.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node ."
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "@google/genai": "^1.5.1",
+    "axios": "^1.10.0",
+    "dotenv": "^16.5.0",
+    "openai": "^5.5.1",
+    "puppeteer": "^24.10.1",
+    "qrcode-terminal": "^0.12.0",
+    "whatsapp-web.js": "^1.30.0"
+  }
+}
