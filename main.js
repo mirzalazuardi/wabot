@@ -16,18 +16,15 @@ const openai = new OpenAI({
 const DEEPSEEK_API_URL = 'https://api.deepseek.com/v1/chat/completions';
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
 
-const client = new Client({
-  puppeteer: {
-    executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-    timeout: 60000 // 60 detik
-  },
-  authStrategy: new LocalAuth()
-});
 
-const allowedGroupIds = [
-  '123456789-123456789@g.us',  // Ganti dengan ID grup yang diizinkan
-  '987654321-987654321@g.us'
+const allowedIds = [
+  '628562324141-1498102635@g.us',
+  '6281224271080@c.us'
 ];
+
+function generateShortRandomString() {
+  return Math.random().toString(36).substring(2, 7);
+}
 
 async function queryGemini(prompt) {
   try {
@@ -37,7 +34,7 @@ async function queryGemini(prompt) {
     });
     return response.text;
   } catch (error) {
-    console.error('Gemini API error:', error);
+    console.error(`${instanceId} - `,'Gemini API error:', error);
     throw new Error('Gemini API gagal');
   }
 }
@@ -55,7 +52,7 @@ async function queryDeepSeek(prompt) {
     });
     return response.data.choices[0].message.content;
   } catch (error) {
-    console.error('DeepSeek API error:', error.response?.data || error.message);
+    console.error(`${instanceId} - `,'DeepSeek API error:', error.response?.data || error.message);
     throw new Error('DeepSeek API gagal');
   }
 }
@@ -70,75 +67,95 @@ async function queryChatGPT(prompt) {
     });
     return completion.choices[0].message.content;
   } catch (error) {
-    console.error('ChatGPT API error:', error);
+    console.error(`${instanceId} - `,'ChatGPT API error:', error);
     throw new Error('ChatGPT API gagal');
   }
 }
 
-client.on('message', async msg => {
-  // allow only group messages
-  //const chatId = msg.from;
-  //const isGroup = chatId.endsWith('@g.us');
-  //
-  //if (!isGroup) {
-  //  return;
-  //}
-  //
-  //if (!allowedGroupIds.includes(chatId)) {
-  //  return;
-  //}
+function createClient(instanceId) {
+  const client = new Client({
+    puppeteer: {
+      executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+      timeout: 60000 // 60 detik
+    },
+    authStrategy: new LocalAuth({
+      clientId: instanceId,
+      dataPath: `./whatsapp-session-${instanceId}`
+    }),
+  });
 
-  const body = msg.body.trim();
-  
-  try {
-    if (body.toLowerCase().startsWith('gemini:')) {
-      const prompt = body.slice('gemini:'.length).trim();
-      if (!prompt) return msg.reply('Tolong tulis pertanyaan setelah prefix "gemini:"');
-      const reply = await queryGemini(prompt);
-      msg.reply(reply);
+  client.on('message', async msg => {
+    // allow only group messages
+    const chatId = msg.from;
+    //const isGroup = chatId.endsWith('@g.us');
+    //
+    //if (!isGroup) {
+    //  return;
+    //}
+    //
+    if (!allowedIds.includes(chatId)) {
+      return;
     }
-    else if (body.toLowerCase().startsWith('deepseek:')) {
-      const prompt = body.slice('deepseek:'.length).trim();
-      if (!prompt) return msg.reply('Tolong tulis pertanyaan setelah prefix "deepseek:"');
-      const reply = await queryDeepSeek(prompt);
-      msg.reply(reply);
+
+    const body = msg.body.trim();
+    
+    try {
+      if (body.toLowerCase().startsWith('gemini:')) {
+        const prompt = body.slice('gemini:'.length).trim();
+        if (!prompt) return msg.reply('Tolong tulis pertanyaan setelah prefix "gemini:"');
+        const reply = await queryGemini(prompt);
+        msg.reply(reply);
+      }
+      else if (body.toLowerCase().startsWith('deepseek:')) {
+        const prompt = body.slice('deepseek:'.length).trim();
+        if (!prompt) return msg.reply('Tolong tulis pertanyaan setelah prefix "deepseek:"');
+        const reply = await queryDeepSeek(prompt);
+        msg.reply(reply);
+      }
+      else if (body.toLowerCase().startsWith('chatgpt:')) {
+        const prompt = body.slice('chatgpt:'.length).trim();
+        if (!prompt) return msg.reply('Tolong tulis pertanyaan setelah prefix "chatgpt:"');
+        const reply = await queryChatGPT(prompt);
+        msg.reply(reply);
+      }
+    } catch (error) {
+      console.error(`${instanceId} - `,'Error saat memproses pesan:', error);
+      msg.reply('Maaf, terjadi kesalahan saat memproses permintaan Anda.');
     }
-    else if (body.toLowerCase().startsWith('chatgpt:')) {
-      const prompt = body.slice('chatgpt:'.length).trim();
-      if (!prompt) return msg.reply('Tolong tulis pertanyaan setelah prefix "chatgpt:"');
-      const reply = await queryChatGPT(prompt);
-      msg.reply(reply);
+  });
+
+  client.on('ready', () => {
+      console.log(`${instanceId} - `,'Client is ready!');
+  });
+
+  client.on('qr', qr => {
+      console.log(`================= QR ${instanceId} - BEGIN - =================- `);
+      qrcode.generate(qr, {small: true});
+      console.log(`================= QR ${instanceId} - END - =================- `);
+  });
+
+  client.on('message_create', async message => {
+      const contact = await message.getContact();
+      const name = contact.pushname;
+      const senderId = message.from;
+      const receiver = message.to;
+
+    console.log(`${instanceId} - `,name, '(', senderId, ')', ' => ', receiver,' : ', message.body);
+  });
+
+  client.on('message_create', message => {
+    if (message.body === '!ping') {
+      // reply back "pong" directly to the message
+      message.reply('pong');
+      client.sendMessage(message.from, 'PONG');
     }
-  } catch (error) {
-    console.error('Error saat memproses pesan:', error);
-    msg.reply('Maaf, terjadi kesalahan saat memproses permintaan Anda.');
-  }
-});
+  });
 
-client.on('ready', () => {
-    console.log('Client is ready!');
-});
+  client.initialize();
 
-client.on('qr', qr => {
-    qrcode.generate(qr, {small: true});
-});
+  return client;
+}
 
-client.on('message_create', async message => {
-    const contact = await message.getContact();
-    const name = contact.pushname;
-    const senderId = message.from;
-    const receiver = message.to;
-
-	console.log(name, '(', senderId, ')', ' => ', receiver,' : ', message.body);
-});
-
-client.on('message_create', message => {
-	if (message.body === '!ping') {
-		// reply back "pong" directly to the message
-		message.reply('pong');
-    client.sendMessage(message.from, 'pongggg');
-	}
-});
-
-client.initialize();
-
+const random_string = generateShortRandomString();
+const client_dummy = createClient('dummy');
+// const client_wina = createClient('wina');
